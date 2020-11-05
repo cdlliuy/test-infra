@@ -59,13 +59,12 @@ func setup(image string, mounts, mandatoryEnvVars, optionalEnvVars []string) (in
 	// Mount the required files and directories on the host machine to the container
 	for _, m := range mounts {
 		if strings.TrimSpace(m) != "" {
-			cmd.AddMount("bind", m, m)
+			sourceAndTarget := strings.Split(m, ":")
+			if len(sourceAndTarget) != 2 {
+				log.Fatalf("The mount string %q must be in the format of [source:target]", m)
+			}
+			cmd.AddMount("bind", sourceAndTarget[0], sourceAndTarget[1])
 		}
-	}
-
-	repoRoot, err := helpers.GetRootDir()
-	if err != nil {
-		log.Fatal("Error getting the repo's root directory: ", err)
 	}
 
 	// Setup temporary directory
@@ -74,6 +73,10 @@ func setup(image string, mounts, mandatoryEnvVars, optionalEnvVars []string) (in
 		log.Fatal("Error setting up the temporary directory: ", err)
 	}
 
+	repoRoot, err := helpers.GetRootDir()
+	if err != nil {
+		log.Fatal("Error getting the repo's root directory: ", err)
+	}
 	// Copy and mount source code dir
 	// Add overlay mount over the user's git repo, so the flow doesn't mess it
 	// up
@@ -102,8 +105,12 @@ func setup(image string, mounts, mandatoryEnvVars, optionalEnvVars []string) (in
 	})
 	cmd.AddEnv(envs)
 
-	// Starting directory
-	cmd.AddArgs("-w=" + repoRoot)
+	wd, err := os.Getwd()
+	if err != nil {
+		log.Fatal("Error getting the working directory: ", err)
+	}
+	// Set starting directory to be the same as the current working directory.
+	cmd.AddArgs("-w=" + wd)
 
 	return cmd, func() {
 		for _, ff := range builtUpDefers {
